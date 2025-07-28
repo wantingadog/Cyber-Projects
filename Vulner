@@ -1,0 +1,231 @@
+#!/bin/bash
+
+
+echo "Welcome! This is an automated service that will scan a network of your choice."    #This introduces the user to the program.
+echo "The tools used in this service are: Nmap, Masscan, Hydra, Zip and Searchsploit. Please ensure you have these tools before starting the service. Thanks :)" 	#This lets the user know what tools the program needs to function.
+echo "<- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - ->"
+echo
+
+#As we needed the user input and choices the menu was created
+#Define an array of menu options
+#https://askubuntu.com/questions/1705/how-can-i-create-a-select-menu-in-a-shell-script
+options=("Basic Scan" "Full Scan" "Check Scans" "Quit")
+
+
+function SCNOK()
+{
+	echo -n "[?] Please enter a name for the destination folder: " #The user will input the name of the directory and all reults will be saved in this directory. This will make it easy for the user to search the results in future.
+	read output_directory
+	echo "[+] Creating directory with the name $output_directory."
+	mkdir $output_directory 
+	cd $output_directory
+	nmap $RANGE -sL | awk '{print $(NF)}' | tr -d '()' | grep ^[0-9]> .IPLIST #As the program only needed the IP address ,it will remove the () brackets from the output. grep ^[0-9] ensures to capture only the lines starting with numbers.
+	for ip_addr in $(cat .IPLIST)
+	do
+	mkdir $ip_addr #The program will make a directory for each IP address to store the respective result so it is more organized.
+	done
+	
+}
+
+function basic_scan() {
+	echo -n "[?] Please enter the IP range you want to scan (EG: 192.168.126.130-140 or 192.168.126/24): "
+	read RANGE
+	nmap $RANGE -sL 2> .firstcheck 1> .ignore #The program checks for any errors and store them in the hidden file. #https://www.geeksforgeeks.org/how-to-redirect-standard-stderr-error-in-bash/
+	rm .ignore
+
+	#This is to check that the IP given by the user will work with nmap. Some users might input errors so the program will not run if the IP range is wrongly entered.
+	if [ ! -z "$(cat .firstcheck)" ]; then #https://nmap.org/book/host-discovery-specify-targets.html. The -sL flag will list all the IP Address in the network.
+		echo "[!] The IP address is not in the correct format. Please try again."
+		basic_scan
+	else
+		echo "The IP range is ok, moving on to the next step."
+		SCNOK
+	fi
+
+#The commands will not be displayed on the terminal as it will clutter the terminal. The results will be saved into a file instead.
+#https://askubuntu.com/questions/350208/what-does-2-dev-null-mean
+#https://askubuntu.com/questions/420981/how-do-i-save-terminal-output-to-a-file
+	for ip_addr in $(cat .IPLIST)
+	do
+	cd $ip_addr #As each folder has been created in the previous step, the program will enter the folder and save the results.
+	echo "Procceding with basic scan for TCP ports on $ip_addr starting with Nmap."
+	nmap $ip_addr -p 1-65535 -sV --script=brute --open -oN nmapbasicscan.on > /dev/null 2>&1 #The program will only save the results of open ports found so that there are less lines in the file and less space used.
+	echo "[+] Nmap scan is done. Results are saved as nmapbasicscan.on in the folder $ip_addr."
+	echo "Procceding with basic scan for UDP ports on $ip_addr with Masscan."
+	sudo masscan $ip_addr -pU:1-65535 --open-only -oL masscan.txt &> masscan_full.lst # Masscan will save the results of only open ports found in the first file called masscan.txt for easy checking but the full terminal output will be saved in another file called masscan_full because if no open ports are found the file will be blank and it may seem like an error.
+	echo "[+] Masscan is done. Results are saved as masscan.og in the folder $ip_addr."
+	cd .. #The program exits the folder when both scans are done.
+	done
+
+}
+
+function full_scan() {
+	echo -n "[?] Please enter the IP range you want to scan (EG: 192.168.126.130-140 or 192.168.126/24): "
+	read RANGE
+	nmap $RANGE -sL 2> .firstcheck 1> .ignore #The program checks for any errors and store them in the hidden file. If the error occurs, there will be lines created in the file and this shows the IP range is wrong. #https://www.geeksforgeeks.org/how-to-redirect-standard-stderr-error-in-bash/
+	rm .ignore
+	#This is to check that the IP given by the user will work with nmap. Some users might input errors so the program will not run if the IP range is wrongly entered.
+	if [ ! -z "$(cat .firstcheck)" ]; then #https://nmap.org/book/host-discovery-specify-targets.html. The -sL flag will list all the IP Address in the network.
+		echo "[!] The IP address is not in the correct format. Please try again."
+		full_scan
+	else
+		echo "The IP range is ok, moving on to the next step."
+		SCNOK
+	fi
+
+#The commands will not be displayed on the terminal as it will clutter the terminal. The results will be saved into a file instead.
+#https://askubuntu.com/questions/350208/what-does-2-dev-null-mean
+#https://askubuntu.com/questions/420981/how-do-i-save-terminal-output-to-a-file
+	for ip_addr in $(cat .IPLIST)
+	do
+	cd $ip_addr  #As each folder has been created in the previous step, the program will enter the folder and save the results.
+	echo "Procceding with full scan for TCP ports on $ip_addr starting with Nmap."
+	nmap $ip_addr -p 1-65535 -sV --open --script ssl-enum-ciphers -oN nmapfullscan.on -oX nmapfullscan.xml > /dev/null 2>&1 # 2 files are saved as 1 is human readable and the other file is needed for searchsploit
+	nmap -sV --script vulners.nse $ip_addr -oN vulners.on > /dev/null 2>&1
+	echo "[+] Nmap scan is done. Results are saved as nmapfullscan.on and vulners.on in the folder $ip_addr."
+	echo "Searchsploit will be used to check for potential exploits and saved into exploits.txt in the folder $ip_addr."
+	searchsploit --nmap nmapfullscan.xml > exploits.txt 2>&1
+	echo "Procceding with full scan for UDP ports on $ip_addr with Masscan."
+	sudo masscan $ip_addr -pU:1-65535 --open-only -oL masscan.txt &> masscan_full.lst # Masscan will save the results of only open ports found in the first file called masscan.txt for easy checking but the full terminal output will be saved in another file called masscan_full because if no open ports are found the file will be blank and it may seem like an error.
+	echo "[+] Masscan is done. Results are saved as masscan.og in the folder $ip_addr."
+	cd .. #The program exits the folder when all scans are done.
+	done	
+}
+
+
+function save_scans() #This function will save everyting in the parent directory into a zip file.
+{
+	echo "[+] All results will be saved in a zip file called results.zip"
+	cd ..
+	zip -r results.zip $output_directory > /dev/null 2>&1
+}
+
+
+function check_scans()
+{
+	echo -n "[?] Please provide the name of the folder: "
+	read NAMEOFSCAN
+	find -type d -iname $NAMEOFSCAN #This will show the location of the directory and the user can search further.
+}
+
+
+
+
+# This will be the first menu the user sees.
+PS3="
+[?] What would you like to do? Please enter your choice: "
+select option in "${options[@]}"; do
+    case $option in
+        "Basic Scan")
+			basic_scan
+			break
+            ;;
+        "Full Scan")
+            full_scan
+            break
+            ;;
+        "Check Scans")
+			check_scans
+			;;
+        "Quit")
+			echo "Thanks for using this service!"
+            exit
+            ;;
+        *)
+            echo "[!] Invalid option. Please try again."
+            ;;
+    esac
+done
+echo
+
+options=("Use default list" "Use my own list" "Quit")
+
+function default_list() {
+	echo "Default password list from SecList will be used."
+	echo "Proceeding to test weak passwords via SSH,RDP,FTP and TELNET with Hydra."
+	for ip_addr in $(cat .IPLIST)
+	do
+	cd $ip_addr
+	wget https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Common-Credentials/10-million-password-list-top-100.txt -O password_list.txt > /dev/null 2>&1
+	wget https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Usernames/top-usernames-shortlist.txt -O username_list.txt > /dev/null 2>&1
+	echo "Now testing $ip_addr...this may take some time. Please take a well deserved break. Thanks for your patience. :)"
+	hydra -L username_list.txt -P password_list.txt -o SSH_file.txt ssh://$ip_addr &> SSH_full.lst 
+	hydra -L username_list.txt -P password_list.txt -o RDP_file.txt rdp://$ip_addr &> RDP_full.lst
+	hydra -L username_list.txt -P password_list.txt -o FTP_file.txt ftp://$ip_addr &> FTP_full.lst
+	hydra -L username_list.txt -P password_list.txt -o TELNET_file.txt telnet://$ip_addr &> TELNET_full.lst
+	echo "[+] Bruteforcing done for $ip_addr! Results are saved in the folder $ip_addr."
+	cd ..
+	done
+	echo
+	echo -n "[?] Would you like to save the scans into a zip file ? (y/n) "
+	read ANSWER
+	if [ $ANSWER == y ]; then #If the user wants the results saved into a zip file the program will run the save_scans function. If any other key is used, the program will exit.
+			save_scans
+		else
+		echo "Goodbye and thank you for using this service!!"
+			exit
+	fi
+}
+
+function user_list() {
+	echo -n "[?] Please enter full path of the password list file of your choice: "
+	read userlist
+	echo "Your password list will be used."
+	for ip_addr in $(cat .IPLIST)
+	do
+	cd $ip_addr
+	wget https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Usernames/top-usernames-shortlist.txt -O username_list.txt > /dev/null 2>&1
+	echo "Proceeding to test weak passwords via SSH,RDP,FTP and TELNET."
+	hydra -L username_list.txt -P $userlist -o SSH_file.txt ssh://$ip_addr &> SSH_full.lst
+	hydra -L username_list.txt -P $userlist -o RDP_file.txt rdp://$ip_addr &> RDP_full.lst
+	hydra -L username_list.txt -P $userlist -o FTP_file.txt ftp://$ip_addr &> FTP_full.lst
+	hydra -L username_list.txt -P $userlist -o TELNET_file.txt telnet://$ip_addr &> TELNET_full.lst
+	echo "[+] Bruteforcing done for $ip_addr! Results are saved in the folder $ip_addr."
+	cd ..
+	done
+	echo
+	echo -n "[?] Would you like to save the scans into a zip file ? (y/n) "
+	read ANSWER
+	if [ $ANSWER == y ]; then 
+			save_scans
+			break
+		else
+		echo "Goodbye and thank you for using this service!!"
+			exit
+	fi
+}
+
+
+echo
+
+
+
+# Display the menu and process user selection
+PS3="
+[?] Now proceeding to test for weak credentials. Please enter your choice: "
+select option in "${options[@]}"; do
+    case $option in
+        "Use default list")
+			default_list
+			break
+            ;;
+        "Use my own list")
+            user_list
+            break
+            ;;
+        "Quit")
+			echo "Thanks for using this service!"
+            exit
+            ;;
+        *)
+            echo "[!] Invalid option. Please try again."
+            ;;
+    esac
+done
+echo
+
+
+
+
+echo "Thanks for using this service!"
+exit
