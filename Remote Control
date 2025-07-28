@@ -1,0 +1,165 @@
+#!/bin/bash
+
+
+#												Project begins below
+
+# This function just prints the text in a slower style like a typewriter. It is just for a bit of fun!
+
+	function typewriter
+{
+    text="$1"
+    delay="$2"
+
+    for i in $(seq 0 $(expr length "${text}")) ; do
+        echo -n "${text:$i:1}"
+        sleep 1
+    done
+}
+
+echo
+typewriter "Welcome!" 
+echo
+echo
+echo "Thanks for using this automated service to connect to a remote server and scan your desired domain/url." 
+sleep 1
+echo
+echo "This service will also install the missing tools needed to run." 
+sleep 1
+echo
+echo "There are a few things you will need to submit when prompted." 
+sleep 1
+echo
+echo "Please prepare the IP address of the remote server, credentials to access the remote server and lastly a domain/url you would like to be scanned." 
+# I listed the things the user will need so they can get it ready now instead of at every prompt
+echo
+echo
+sleep 1
+# The packages I want to check is installed in the user machine is in this list. 
+# The loop will check if each package is installed and install them if needed.
+PACKAGES=("nmap" "curl" "whois" "sshpass" "tor" "geoip-bin" "rsyslog")
+
+is_installed() {
+    dpkg -s "$1" &>/dev/null
+}
+
+# Loop through the list of packages
+for package in "${PACKAGES[@]}"; do
+    if is_installed "$package"; then
+        echo "$package is already installed."
+    else
+        echo "$package is not installed. Installing... This may take some time"
+        sudo apt update > /dev/null 2>&1
+        sudo apt install -y "$package" > /dev/null 2>&1
+    fi
+done
+
+echo "Package check and installation complete."
+
+# The next component is nipe. nipe is not in built in kali and it is not a package so it needs to be downloaded
+echo
+echo Cloning nipe and installing perl... This may take some time
+git clone https://github.com/htrgouvea/nipe > /dev/null 2>&1
+cd nipe
+sudo apt-get install -y cpanminus > /dev/null 2>&1
+
+cpanm --installdeps . > /dev/null 2>&1
+
+$yes | sudo cpan install Switch JSON LWP::UserAgent Config::Simple > /dev/null 2>&1
+
+sudo perl nipe.pl install > /dev/null 2>&1
+sudo perl nipe.pl start > /dev/null 2>&1
+
+echo
+while true; do
+	ip_check=$(sudo perl nipe.pl status | wc -l)
+	# this checks that the connection is anonymous before moving on to the next step
+	if [ $ip_check -eq 4 ]
+		then 
+		spoof_ip=$(sudo perl nipe.pl status | grep Ip | awk '{print $3}')
+			echo You are anonymous...this is your spoofed IP address : "$spoof_ip"
+			location_ip=$(geoiplookup "$spoof_ip"| awk '{print $5,$6}')
+			echo The location is : "$location_ip"
+			break
+			
+		else
+		echo The connection is not anonymous. Retrying...
+		sleep 3
+		echo
+		sudo perl nipe.pl restart
+fi	
+done
+
+# This section ask user for the needed variables to access the remote server
+echo
+echo
+echo Please provide a domain/url
+read domain
+echo
+echo Please provide the remote server
+read server
+echo Please provide the username
+read username
+echo 'Please provide the password (input is hidden, press enter when done)'
+read -s password
+echo
+
+
+
+
+# Here the script will access a server remotely using the inputs from the user as the variables
+
+
+function sshpass_command() 
+{
+	sshpass -p "$password" ssh -o StrictHostKeyChecking=no -T "$username@$server" "$1"
+}
+
+# Run Nmap scan and save results to a file
+echo Scanning $domain using nmap...
+sshpass_command "nmap $domain -oN nmap_file" > /dev/null 2>&1
+echo Nmap scan results saved to nmap_file on remote server.
+
+
+# Run whois scan and save results to a file
+echo Scanning $domain using whois...
+sshpass_command "whois $domain > whois_file" > /dev/null 2>&1    
+echo Whois scan results saved to whois_file on remote server.
+
+echo
+
+
+# Following step is to download the files from the remote server to the user machine
+sshpass -p "$password" sftp -oBatchMode=no -b - "$username@$server" <<EOF > /dev/null 2>&1
+get /home/"$username"/nmap_file .
+get /home/"$username"/whois_file .
+bye
+EOF
+echo Nmap scan results in the file called nmap_file has been downloaded to your machine.
+echo Whois scan results in the file called whois_file has been downloaded to your machine.
+
+# Last step is to log everything down to the local machine
+echo
+
+echo "Scans were logged on : [$(date "+%Y-%m-%d %H:%M:%S")]. "
+
+# Here the function log_scan was created as this command will be used multiple times
+
+function log_scan() {
+	logger -t logforscan "$1"
+}
+
+log_scan "Scans were executed on : [$(date "+%Y-%m-%d %H:%M:%S")]. " 
+log_scan "[$(date "+%Y-%m-%d %H:%M:%S")] '$domain' was scanned"
+log_scan "[$(date "+%Y-%m-%d %H:%M:%S")] Nmap data collected "
+log_scan "[$(date "+%Y-%m-%d %H:%M:%S")] Whois data collected "
+echo "[$(date "+%Y-%m-%d %H:%M:%S")] - Nmap data collected for $domain "
+echo "[$(date "+%Y-%m-%d %H:%M:%S")] - Whois data collected for $domain "
+echo "The location of log is: /var/log/syslog. (For some machines it can be saved at /var/log/messages or /var/log/user.log)"
+echo The logs have been tagged with logforscan to make it easier to pull up when needed.
+
+echo
+echo
+
+
+echo Thank you for using this service. 
+typewriter Goodbye!
