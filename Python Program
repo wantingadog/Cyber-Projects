@@ -1,0 +1,205 @@
+#!/usr/bin/python3
+
+
+
+# This is a file encryption and decryption tool
+import cryptography #this will import the cryptography library
+
+from cryptography.fernet import Fernet
+#https://thepythoncode.com/article/encrypt-decrypt-files-symmetric-python
+
+import hashlib #this is needed for finding the hash of a file.
+import os #this module is needed when the user wants to encrypt/decrypt all files in a folder.
+
+#https://www.reddit.com/r/learnpython/comments/1fcpy56/what_is_the_simplest_way_to_encrypt_images_and/
+
+#This section of imports is needed for the password
+import base64
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+#https://nitratine.net/blog/post/encryption-and-decryption-in-python/
+
+
+def user_key():
+	password_provided = input("Please provide a password: ")
+	password = password_provided.encode()  
+	salt = b'B<\xac^\xbf\xff\xdaO\x92\xb8r\x18z\x95\xf0Q'
+	kdf = PBKDF2HMAC(
+		algorithm=hashes.SHA256(),
+		length=32,
+		salt=salt,
+		iterations=100000,
+		backend=default_backend()
+	)
+	user_key = base64.urlsafe_b64encode(kdf.derive(password)) 
+	
+	with open('key.key', 'wb') as f:
+		f.write(user_key)
+#The whole password coding section was from https://nitratine.net/blog/post/encryption-and-decryption-in-python/
+	#and modifications were made after watching 'How to use Python File Encryption with a Password Key? (Part 4)'https://www.youtube.com/watch?v=hsRR9-aZZ4Q
+	
+	
+#This option is here so the user does not need to generate a new key everytime they open the program and can use the existing key if the machine has it	
+def exists_key():
+    with open('key.key', 'rb') as f:
+        user_key = f.read()
+        
+        
+#This section is for working with one file only        
+
+def encrypt_user():
+	with open('key.key', 'rb') as f:
+		user_key = f.read()
+	file = input("Enter a file to encrypt: ")
+	with open(file, 'rb') as f:
+		data = f.read()
+	fernet = Fernet(user_key)
+	encrypted = fernet.encrypt(data)
+	new_file = file[:-4] + '_en_' + file[-4:]
+	with open(new_file, 'wb') as f:
+		f.write(encrypted)
+		print("The file has been saved as '_en_(filename)'")
+        
+# I followed the example from the webiste below and created a new file that will be encrypted so the user can still keep the original safely and move/send the encrypted file. This was also to help me while I was testing the code.
+#https://www.reddit.com/r/learnpython/comments/1fcpy56/what_is_the_simplest_way_to_encrypt_images_and/
+        
+def decrypt_user():
+	with open('key.key', 'rb') as f:
+		user_key = f.read()
+	file = input("Enter a file to decrypt: ")
+	with open(file, 'rb') as f:
+		data = f.read()
+	fernet = Fernet(user_key)
+	decrypted = fernet.decrypt(data)
+	new_file = file[:-4] + '_de_' + file[-4:]
+	with open(new_file, 'wb') as f:
+		f.write(decrypted)
+		print("The file has been saved as '_de_(filename)'")
+
+
+#This section is for working with multiple files
+#https://stackoverflow.com/questions/72334048/how-to-encrypt-nested-folders-inside-a-directory
+#I modified the code from the website above
+
+def encrypt_file():
+	folder_path=input("Please provide the path to the folder to encrypt all files: ")
+	def load_key():
+		file = open('key.key', 'rb')
+		key_ = file.read()
+		file.close()
+		return key_
+	
+	key = load_key()
+	fer = Fernet(key)
+
+	os.chdir(folder_path.format(user=os.getlogin()))
+	files = os.listdir()
+	print(files)
+
+	for i in range(len(files)):
+
+		with open(files[i], 'rb') as f:
+			data = f.read()
+
+		with open(files[i], 'w') as f:
+			print(len(data))
+			f.write(fer.encrypt(data).decode())
+			print('done')
+
+
+
+def decrypt_file():
+	folder_path = input("Enter the path of the folder: ")
+	
+	def load_key():
+		file = open('key.key', 'rb')
+		key_ = file.read()
+		file.close()
+		return key_
+	
+	key = load_key()
+	fernet = Fernet(key)
+	
+	os.chdir(folder_path.format(user=os.getlogin()))
+	files = os.listdir()
+	print(files)
+    
+	for i in range(len(files)):
+
+		with open(files[i], 'rb') as f:
+			data = f.read()
+			decrypted = fernet.decrypt(data)
+
+		with open(files[i], 'wb') as f:
+			print(len(data))
+			f.write(decrypted)			
+			print('done')
+
+
+
+
+
+
+
+#This section is to find the hash of a file
+#https://stackoverflow.com/questions/22058048/hashing-a-file-in-python	
+
+def compute_file_hash():
+
+	inputFile = input("Enter the name of the file:")
+	openedFile = open(inputFile,'rb')
+	readFile = openedFile.read()
+
+	md5Hash = hashlib.md5(readFile)
+	md5Hashed = md5Hash.hexdigest()
+
+	sha1Hash = hashlib.sha1(readFile)
+	sha1Hashed = sha1Hash.hexdigest()
+
+	print()
+	print("File Name: %s" % inputFile)
+	print("MD5: %r" % md5Hashed)
+	print("SHA1: %r" % sha1Hashed)
+
+
+
+
+#The menu was created to make it user friendly
+#https://medium.com/@firozkaif27/create-a-python-menu-to-run-various-commands-7be4d70cc127
+
+def display_menu():
+    print("\nWelcome to the file encryption / decryption tool!\n")
+    print("1. Generate a key using your password")
+    print("2. Use existing key (using the last password)")
+    print("3. Encrypt one file")
+    print("4. Decrypt one file")
+    print("5. Encrpyt all files in a folder")
+    print("6. Decrpyt all files in a folder")
+    print("7. Check the hash of one file")
+    print("8. Exit")
+    print()
+    choice = input("Please enter your choice: ")
+    return int(choice)
+
+while True:
+	choice = display_menu()
+    
+	if choice == 1:
+		user_key()
+	elif choice == 2:
+		exists_key()    
+	elif choice == 3:
+		encrypt_user()
+	elif choice == 4:
+		decrypt_user()
+	elif choice == 5:
+		encrypt_file()
+	elif choice == 6:
+		decrypt_file()
+	elif choice == 7:
+		compute_file_hash()
+	elif choice == 8:
+		break	
+	else:
+		print("Invalid choice. Please choose again.")
