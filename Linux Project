@@ -1,0 +1,74 @@
+#!/bin/bash
+
+echo "Hello! :) Welcome to this special service made just for you!
+This service will provide important information about your machine.
+Here we go:"
+
+#I will be using 'echo' to create new line spacing throughout my script.
+#Reference:www.diskinternals.com/linux-reader/new-line-in-shell-script.
+
+echo
+echo
+
+#public IP address -> this script only extracts the IP address field from the output and displays only the first 2 octet as I blocked the last 2 octets.
+curl -s ifconfig.io | awk -F. '{print "Your Public IP address is" " "  $1 "." $2 ".XX.XX" }'
+
+echo
+
+#private ip address -> this script only extracts the IP address field from the output and displays it.
+IPX=$(ip a |grep "inet "| awk '{print $2}'| tail -1 )
+echo "Your internal IP address is $IPX"
+
+echo
+
+#the MAC address of the machine(censor the 1st section) -> this script only extracts the MAC address field from the output and displays only 4th,5th and 6th sections after I split the MAC address with the ":" field.
+ifconfig | grep ether | awk '{ print $2 }' |  awk -F: '{ print "Your Mac address is" " " "XX" ":" $2 ":"  $3 ":" $4 ":" $5":" $6}'
+
+echo
+
+#Display the top 5 processes’ CPU usage(percentage) -> this script only displays the top 5 processes.
+
+echo "Displayed below are your top 5 processes(shown in percentage):"
+ps -e -o cmd,%cpu --sort=-%cpu | head -n 6
+
+#Reference: unix.stackexchange.com/questions/13968/show-top-five-cpu-consuming-processes-with-ps.
+
+echo
+
+#Display the Memory Usage, Free and Used -> This Script extracts the Memory usage and I presented them in 3 rows instead so it is easier for the user to read.
+disk1=$(free -m | grep 'Mem' | awk '{print $2}') 
+disk2=$(free -m | grep 'Mem' | awk '{print $3}')
+disk3=$(free -m | grep 'Mem' | awk '{print $4}')
+
+echo "Listed below is how much disk space you have:
+Total : "$disk1" MB 
+Used : "$disk2" MB
+Avilable : "$disk3" MB "
+
+#Reference: www.inmotionhosting.com/support/server/linux/check-memory-usage/#:~:text=%2Fproc%2Fmeminfo-,Linux%20free%20%2Dm,as%20MB%20instead%20of%20KB.&text=The%20free%20column%20beside%20%2D%2F%2B,free%20memory%20available%20to%20Linux.
+
+echo
+
+#Display your Active system services and status -> This script shows the active system services and status.
+echo "Listed below are you active system services and status:"
+systemctl list-units --type=service --state=running
+
+#Reference: https://www.tecmint.com/list-all-running-services-under-systemd-in-linux/
+
+echo
+
+#Display the top 10 files(size) from the `/home` directory -> This script shows the top 10 biggest files in the /home directory.
+display=$(du -a -h /home |sort -n -r | head -n 10)
+echo "Listed below are the top 10 files in your Home directory (arranged in descending order):
+
+$display"
+
+#Reference: my.cloudfanatic.net/index.php/knowledgebase/5/How-Do-I-Find-The-Largest-Top-10-Files-and-Directories-On-a-Linux-or-UNIX-or-BSD.html.
+
+echo 
+
+echo "Thank you for using this service!"
+
+echo
+
+echo "Bye Bye for now and have a great day ahead :)"
