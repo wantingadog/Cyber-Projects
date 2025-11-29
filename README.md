@@ -37,7 +37,6 @@ This repository is organized by cybersecurity domain or project type. Each folde
 | `03_Defensive_Scripts` | Code focused on blue-team operations, including log analysis, incident response simulations, or secure coding examples. |
 | `04_CTF_Writeups` | Documentation and step-by-step solutions for challenges from platforms like Hack The Box, TryHackMe, or PicoCTF. |
 | `05_Cryptography` | Implementations of classic ciphers, hashing, or modern cryptographic algorithms for educational purposes. |
-| `[Other_Folder_Name]` | **[Description of other projects, e.g., Forensics, Reverse Engineering, Cloud Security]** |
 
 ---
 
@@ -54,10 +53,8 @@ Here are a few notable projects within this collection:
 ### **[Project Name 2: e.g., Brute Force Attack Script]**
 * **Goal:** **[e.g., Create a proof-of-concept tool to test login pages against a wordlist.]**
 * **Key Skills Demonstrated:** **[e.g., HTTP request handling, session management, web security.]**
-* **Status:** In Progress.
+* **Status:** Complete.
 * **Path:** `[02_Penetration_Testing/brute_force_tool/]`
-
-***(Add more highlights as needed, or link to a separate `PROJECT_LIST.md` file.)***
 
 ---
 
@@ -86,9 +83,6 @@ To run the tools and scripts in this repository, you will generally need:
     pip install -r requirements.txt
     ```
 
-### Usage
-
-Navigate to the directory of the project you want to run and follow the instructions in that project's local `README.md` file.
 
 ```bash
 # Example: Running the Simple Port Scanner
